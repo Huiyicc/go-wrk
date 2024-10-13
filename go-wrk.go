@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/signal"
 	"runtime"
@@ -11,35 +11,38 @@ import (
 	"time"
 
 	histo "github.com/HdrHistogram/hdrhistogram-go"
-	"github.com/tsliwowicz/go-wrk/loader"
-	"github.com/tsliwowicz/go-wrk/util"
+	"github.com/huiyicc/go-wrk/loader"
+	"github.com/huiyicc/go-wrk/util"
 )
 
-const APP_VERSION = "0.10"
+const APP_VERSION = "0.11"
 
-//default that can be overridden from the command line
-var versionFlag bool = false
-var helpFlag bool = false
-var duration int = 10 //seconds
-var goroutines int = 2
-var testUrl string
-var method string = "GET"
-var host string
-var headerFlags util.HeaderList
-var header map[string]string
-var statsAggregator chan *loader.RequesterStats
-var timeoutms int
-var allowRedirectsFlag bool = false
-var disableCompression bool
-var disableKeepAlive bool
-var skipVerify bool
-var playbackFile string
-var reqBody string
-var clientCert string
-var clientKey string
-var caCert string
-var http2 bool
-var cpus int = 0
+// default that can be overridden from the command line
+var (
+	versionFlag        bool = false
+	helpFlag           bool = false
+	duration           int  = 10 //seconds
+	goroutines         int  = 2
+	testUrl            string
+	method             string = "GET"
+	host               string
+	headerFlags        util.HeaderList
+	header             map[string]string
+	statsAggregator    chan *loader.RequesterStats
+	timeoutms          int
+	allowRedirectsFlag bool = false
+	disableCompression bool
+	disableKeepAlive   bool
+	skipVerify         bool
+	playbackFile       string
+	reqBody            string
+	bb1                string
+	clientCert         string
+	clientKey          string
+	caCert             string
+	http2              bool
+	cpus               int = 0
+)
 
 func init() {
 	flag.BoolVar(&versionFlag, "v", false, "Print version details")
@@ -57,13 +60,14 @@ func init() {
 	flag.Var(&headerFlags, "H", "Header to add to each request (you can define multiple -H flags)")
 	flag.StringVar(&playbackFile, "f", "<empty>", "Playback file name")
 	flag.StringVar(&reqBody, "body", "", "request body string or @filename")
+	flag.StringVar(&bb1, "bb1", "", "request body string or @filename")
 	flag.StringVar(&clientCert, "cert", "", "CA certificate file to verify peer against (SSL/TLS)")
 	flag.StringVar(&clientKey, "key", "", "Private key file name (SSL/TLS")
 	flag.StringVar(&caCert, "ca", "", "CA file to verify peer against (SSL/TLS)")
 	flag.BoolVar(&http2, "http", true, "Use HTTP/2")
 }
 
-//printDefaults a nicer format for the defaults
+// printDefaults a nicer format for the defaults
 func printDefaults() {
 	fmt.Println("Usage: go-wrk <options> <url>")
 	fmt.Println("Options:")
@@ -73,11 +77,11 @@ func printDefaults() {
 }
 
 func mapToString(m map[string]int) string {
-	s := make([]string,0,len(m))
-	for k,v := range m {
-		s = append(s,fmt.Sprint(k,"=",v))
+	s := make([]string, 0, len(m))
+	for k, v := range m {
+		s = append(s, fmt.Sprint(k, "=", v))
 	}
-	return strings.Join(s,",")
+	return strings.Join(s, ",")
 }
 
 func main() {
@@ -103,7 +107,7 @@ func main() {
 			os.Exit(1)
 		}
 		defer file.Close()
-		url, err := ioutil.ReadAll(file)
+		url, err := io.ReadAll(file)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
@@ -126,10 +130,9 @@ func main() {
 	}
 
 	fmt.Printf("Running %vs test @ %v\n  %v goroutine(s) running concurrently\n", duration, testUrl, goroutines)
-
 	if len(reqBody) > 0 && reqBody[0] == '@' {
 		bodyFilename := reqBody[1:]
-		data, err := ioutil.ReadFile(bodyFilename)
+		data, err := os.ReadFile(bodyFilename)
 		if err != nil {
 			fmt.Println(fmt.Errorf("could not read file %q: %v", bodyFilename, err))
 			os.Exit(1)
@@ -147,7 +150,7 @@ func main() {
 	}
 
 	responders := 0
-	aggStats := loader.RequesterStats{ErrMap: make(map[string]int), Histogram: histo.New(1,int64(duration * 1000000),4)}
+	aggStats := loader.RequesterStats{ErrMap: make(map[string]int), Histogram: histo.New(1, int64(duration*1000000), 4)}
 
 	for responders < goroutines {
 		select {
@@ -160,7 +163,7 @@ func main() {
 			aggStats.TotRespSize += stats.TotRespSize
 			aggStats.TotDuration += stats.TotDuration
 			responders++
-			for k,v := range stats.ErrMap {
+			for k, v := range stats.ErrMap {
 				aggStats.ErrMap[k] += v
 			}
 			aggStats.Histogram.Merge(stats.Histogram)
@@ -208,5 +211,5 @@ func main() {
 }
 
 func toDuration(usecs int64) time.Duration {
-	return time.Duration(usecs*1000)
+	return time.Duration(usecs * 1000)
 }
